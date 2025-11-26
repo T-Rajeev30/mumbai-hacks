@@ -299,3 +299,101 @@ To build India’s first Self-Preparing Hospital System, enabling hospitals to a
 
 Arogya AI is not just a demo —
 it is a foundation for the future of autonomous healthcare infrastructure.
+
+PHASE 2 — HIGH-LEVEL FLOW
+
+Phase 2 had one purpose:
+Produce realistic hospital data so the simulation engine (Phase 3) can run on real-like input.
+
+To achieve that, you moved through four major stages:
+
+1. Designed the Hospital Data Structure (Schema Planning)
+
+You defined what each hospital should look like:
+
+Basic identity (id)
+
+Location (lat, lon, city, state)
+
+Baseline patient load
+
+Departments (capacity + staffing)
+
+Resources (beds, ventilators, oxygen, ambulances)
+
+Past 7 days patient activity
+
+Sensitivity multipliers (pollution, festival, weather)
+
+This ensures data is predictive-friendly for Phase 3.
+
+2. Built a Synthetic Data Generator
+
+You implemented a script that:
+
+Randomizes realistic values
+
+Generates N hospitals
+
+Outputs two dataset sizes
+
+100 hospitals → dev.json
+
+1000 hospitals → prod.json
+
+The output became your structured dataset, not manually created.
+
+This guarantees:
+
+consistency
+
+reproducibility
+
+scale
+
+3. Defined a Matching MongoDB Schema
+
+You updated the Mongoose model so it reflects the exact data structure the generator produces.
+
+Schema includes:
+
+nested arrays
+
+resources object
+
+2dsphere geo index
+
+sensitivities
+
+past week data
+
+This ensures MongoDB stores data in a form your simulation engine expects.
+
+4. Seeded 100 Hospitals into MongoDB
+
+You built and executed a seed script that:
+
+Loaded dev.json
+
+Converted lat/lon → GeoJSON point
+
+Cleared old hospital data
+
+Inserted all 100 records into MongoDB
+
+This gives your backend:
+
+a real dataset to read
+
+consistent records for API testing
+
+a foundation for simulation logic
+
+What Phase 2 Achieved Overall
+You now have:
+
+✔ A realistic dataset that resembles real hospitals
+✔ Scalable data (100 for dev, 1000 for simulation)
+✔ A consistent database model aligned with your generator
+✔ A MongoDB collection loaded with real-like hospitals
+✔ Solid foundation for surge simulation (Phase 3)
