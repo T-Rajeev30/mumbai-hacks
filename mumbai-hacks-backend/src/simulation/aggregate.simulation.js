@@ -1,10 +1,9 @@
-import { simulateHospital } from "./simulateHospital.simulation.js";
 import Hospital from "../models/Hospital.models.js";
+import { simulateHospital } from "./simulateHospital.simulation.js";
 
-/**
- * Aggregate simulation results for an array of simulation outputs.
- * groups: { city, state } => totals, averages, risk distribution
- */
+// ----------------------------
+// Helper: roll up a group
+// ----------------------------
 function rollupGroup(results) {
   const out = {
     totalHospitals: results.length,
@@ -12,7 +11,15 @@ function rollupGroup(results) {
     avgPredictedLoad: 0,
     avgBedUtilization: 0,
     avgVentilatorUtilization: 0,
-    riskCounts: { LOW_RISK: 0, MEDIUM_RISK: 0, HIGH_RISK: 0 },
+    riskCounts: {
+      LOW_RISK: 0,
+      MEDIUM_RISK: 0,
+      HIGH_RISK: 0,
+    },
+    alerts: {
+      WARNING: 0,
+      CRITICAL: 0,
+    },
   };
 
   if (results.length === 0) return out;
@@ -21,100 +28,104 @@ function rollupGroup(results) {
     out.totalPredictedLoad += r.predictedLoad || 0;
     out.avgBedUtilization += parseFloat(r.bedUtilization || 0);
     out.avgVentilatorUtilization += parseFloat(r.ventilatorUtilization || 0);
-    out.riskCounts[r.status] = (out.riskCounts[r.status] || 0) + 1;
+
+    if (r.status) {
+      out.riskCounts[r.status] += 1;
+    }
+
+    // ✅ ALERT AGGREGATION
+    if (r.alerts && Array.isArray(r.alerts)) {
+      r.alerts.forEach((a) => {
+        if (a.level === "CRITICAL") out.alerts.CRITICAL += 1;
+        if (a.level === "WARNING") out.alerts.WARNING += 1;
+      });
+    }
   }
 
   out.avgPredictedLoad = Math.round(out.totalPredictedLoad / results.length);
-  out.avgBedUtilization = +(out.avgBedUtilization / results.length).toFixed(2);
-  out.avgVentilatorUtilization = +(
-    out.avgVentilatorUtilization / results.length
-  ).toFixed(2);
+  out.avgBedUtilization = parseFloat(
+    (out.avgBedUtilization / results.length).toFixed(2)
+  );
+  out.avgVentilatorUtilization = parseFloat(
+    (out.avgVentilatorUtilization / results.length).toFixed(2)
+  );
 
   return out;
 }
 
-/**
- * simulate & aggregate by city/state
- * options: { by: "city"|"state"|"all" }
- */
-export async function aggregateSimulations({ by = "city" } = {}) {
+// ----------------------------
+// Aggregate ALL (city + state + overall)
+// ----------------------------
+export async function aggregateSimulations({ by = "all" } = {}) {
   const hospitals = await Hospital.find({}).lean();
 
-  // simulate every hospital
-  const sims = hospitals.map((h) => {
-    // ensure simulateHospital can accept plain object as produced by mongoose .lean()
-    return simulateHospital(h);
+  const simulations = hospitals.map((h) => simulateHospital(h));
+
+  const cityMap = {};
+  const stateMap = {};
+
+  hospitals.forEach((h, idx) => {
+    const sim = simulations[idx];
+
+    const city = h.location?.city || "UNKNOWN";
+    const state = h.location?.state || "UNKNOWN";
+
+    cityMap[city] = cityMap[city] || [];
+    cityMap[city].push(sim);
+
+    stateMap[state] = stateMap[state] || [];
+    stateMap[state].push(sim);
   });
 
-  // group
-  const groups = {};
-  for (let i = 0; i < hospitals.length; i++) {
-    const h = hospitals[i];
-    const sim = sims[i];
+  const result = {
+    overall: rollupGroup(simulations),
+  };
 
-    const city = h.location && h.location.city ? h.location.city : "Unknown";
-    const state = h.location && h.location.state ? h.location.state : "Unknown";
-
-    if (by === "city" || by === "all") {
-      groups.city = groups.city || {};
-      groups.city[city] = groups.city[city] || [];
-      groups.city[city].push(sim);
-    }
-
-    if (by === "state" || by === "all") {
-      groups.state = groups.state || {};
-      groups.state[state] = groups.state[state] || [];
-      groups.state[state].push(sim);
-    }
-  }
-
-  // rollups
-  const rollups = {};
-  if (groups.city) {
-    rollups.cities = Object.entries(groups.city).map(([city, arr]) => ({
+  if (by === "city" || by === "all") {
+    result.cities = Object.entries(cityMap).map(([city, sims]) => ({
       city,
-      summary: rollupGroup(arr),
-      hospitals: arr.length,
+      hospitals: sims.length,
+      summary: rollupGroup(sims),
     }));
   }
-  if (groups.state) {
-    rollups.states = Object.entries(groups.state).map(([state, arr]) => ({
+
+  if (by === "state" || by === "all") {
+    result.states = Object.entries(stateMap).map(([state, sims]) => ({
       state,
-      summary: rollupGroup(arr),
-      hospitals: arr.length,
+      hospitals: sims.length,
+      summary: rollupGroup(sims),
     }));
   }
 
-  // also provide overall summary
-  rollups.overall = rollupGroup(sims);
-
-  return rollups;
+  return result;
 }
 
-/**
- * Aggregate for a single city
- */
+// ----------------------------
+// Aggregate single CITY
+// ----------------------------
 export async function aggregateByCity(cityName) {
   const hospitals = await Hospital.find({ "location.city": cityName }).lean();
-  const sims = hospitals.map((h) => simulateHospital(h));
+  const simulations = hospitals.map((h) => simulateHospital(h));
+
   return {
     city: cityName,
-    summary: rollupGroup(sims),
-    hospitals: sims.length,
-    hospitalsDetail: sims,
+    hospitals: simulations.length,
+    summary: rollupGroup(simulations),
+    hospitalDetails: simulations,
   };
 }
 
-/**
- * Aggregate for a single state
- */
+// ----------------------------
+// Aggregate single STATE
+// ----------------------------
 export async function aggregateByState(stateName) {
   const hospitals = await Hospital.find({ "location.state": stateName }).lean();
-  const sims = hospitals.map((h) => simulateHospital(h));
+  const simulations = hospitals.map((h) => simulateHospital(h));
+
   return {
     state: stateName,
-    summary: rollupGroup(sims),
-    hospitals: sims.length,
-    hospitalsDetail: sims,
+    hospitals: simulations.length,
+    summary: rollupGroup(simulations),
+    hospitalDetails: simulations,
   };
 }

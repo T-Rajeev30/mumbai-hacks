@@ -9,7 +9,7 @@ import hospitals from "./routes/hospitals.routes.js";
 import simulationRoutes from "./routes/simulation.routes.js";
 import eventRoutes from "./routes/event.routes.js";
 import aggregationRoutes from "./routes/aggregation.routes.js";
-
+import alertRoutes from "../src/routes/alerts.routes.js";
 const app = express();
 console.log(">>> app.js LOADED");
 
@@ -24,6 +24,7 @@ app.use("/api/hospitals", hospitals);
 app.use("/api", aggregationRoutes);
 app.use("/api", simulationRoutes);
 app.use("/api", eventRoutes);
+app.use("/api", alertRoutes);
 
 app.use((req, res) => res.status(404).json({ message: "Not found" }));
 
