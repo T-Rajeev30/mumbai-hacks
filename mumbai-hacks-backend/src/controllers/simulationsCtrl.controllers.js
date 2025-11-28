@@ -1,19 +1,33 @@
-import Simulation from "../models/Simulation.models.js";
+import Hospital from "../models/Hospital.models.js";
+import { simulateHospital } from "../simulation/simulateHospital.simulation.js";
+import { simulateAllHospitals } from "../simulation/simulateAllHospitals.simulation.js";
 
-export const listSimulations = async (req, res, next) => {
+export async function simulateAll(req, res) {
   try {
-    const docs = await Simulation.find().limit(100).lean();
-    res.json({ requestId: req.id, data: docs });
+    const results = await simulateAllHospitals();
+    return res.status(200).json({
+      count: results.length,
+      results,
+    });
   } catch (err) {
-    next(err);
+    console.error("Simulation error:", err);
+    return res.status(500).json({ error: "Simulation failed" });
   }
-};
+}
 
-export const createSimulation = async (req, res, next) => {
+export async function simulateOne(req, res) {
   try {
-    const doc = await Simulation.create(req.body);
-    res.status(201).json({ requestId: req.id, data: doc });
+    const { id } = req.params;
+    const hospital = await Hospital.findOne({ id });
+
+    if (!hospital) {
+      return res.status(404).json({ error: "Hospital not found" });
+    }
+
+    const result = simulateHospital(hospital);
+    return res.status(200).json(result);
   } catch (err) {
-    next(err);
+    console.error("Simulation error:", err);
+    return res.status(500).json({ error: "Simulation failed" });
   }
-};
+}

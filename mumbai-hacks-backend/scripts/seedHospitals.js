@@ -1,23 +1,25 @@
 import mongoose from "mongoose";
 import fs from "fs";
 import path from "path";
+import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import Hospital from "../src/models/Hospital.models.js";
 
-// Fix __dirname in ESM
+dotenv.config(); // Load .env
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// TODO: Replace with your actual MongoDB URI
-const MONGO_URI = "mongodb://127.0.0.1:27017/mumbaiHacks";
+// Get connection string from .env
+const MONGO_URI = process.env.MONGO_URI;
 
 async function seedHospitals() {
   try {
-    console.log("Connecting to MongoDB...");
+    console.log("Connecting to MongoDB:", MONGO_URI);
     await mongoose.connect(MONGO_URI);
+
     console.log("Connected");
 
-    // Read dev.json (100 hospitals)
     const filePath = path.join(__dirname, "../data/hospitals/dev.json");
     const rawData = fs.readFileSync(filePath, "utf-8");
     let hospitals = JSON.parse(rawData);
@@ -29,7 +31,7 @@ async function seedHospitals() {
         ...h.location,
         geo: {
           type: "Point",
-          coordinates: [h.location.lon, h.location.lat], // GeoJSON format
+          coordinates: [h.location.lon, h.location.lat],
         },
       },
     }));
