@@ -1,7 +1,6 @@
 import { simulateHospital } from "./simulateHospital.simulation.js";
 import { evaluateAlerts } from "./evaluateAlerts.js";
 
-// growth damping to avoid runaway
 const DAMPING = 0.85;
 const MAX_MULTIPLIER = 1.6;
 
@@ -10,19 +9,23 @@ function nextDayLoad(prevLoad, trendFactor) {
   return prevLoad * (1 + growth * DAMPING);
 }
 
-export function forecastHospital(hospital, days = 7) {
-  const base = simulateHospital(hospital);
+/**
+ * @param {Object} hospital
+ * @param {number} days
+ * @param {Object} [mlPrediction]  optional { lower, median, upper }
+ */
+export function forecastHospital(hospital, days = 7, mlPrediction) {
+  // today simulation, optionally ML-enhanced
+  const todaySim = simulateHospital(hospital, mlPrediction);
 
   const beds = hospital.resources?.beds || 1;
   const vents = hospital.resources?.ventilators || 1;
 
   const results = [];
-  let load = base.predictedLoad;
+  let load = todaySim.predictedLoad; // start from final chosen base (sim or ML)
 
   for (let d = 1; d <= days; d++) {
-    load = nextDayLoad(load, base.trendFactor);
-
-    // cap unrealistic growth
+    load = nextDayLoad(load, todaySim.trendFactor);
     load = Math.min(load, beds * MAX_MULTIPLIER);
 
     const bedUtil = load / beds;
@@ -48,7 +51,7 @@ export function forecastHospital(hospital, days = 7) {
 
   return {
     hospitalId: hospital.id,
-    today: base,
+    today: todaySim,
     forecast: results,
   };
 }

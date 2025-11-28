@@ -2,48 +2,69 @@ import { calculateTrends } from "./calculateTrends.simulation.js";
 import { applyModifiers } from "./applyModifiers.simulation.js";
 import { evaluateAlerts } from "./evaluateAlerts.js";
 
-export function simulateHospital(hospital) {
-  // 1️⃣ Trends
+/**
+ * @param {Object} hospital  - hospital document
+ * @param {Object} [mlPrediction] - optional ML quantiles { lower, median, upper }
+ */
+export function simulateHospital(hospital, mlPrediction) {
+  // 1) Trends from past week
   const { movingAvg, trendFactor } = calculateTrends(
     hospital.pastWeekData || []
   );
 
-  // 2️⃣ Base prediction
-  let predictedLoad = movingAvg * (1 + trendFactor);
+  // 2) Baseline simulated load (deterministic)
+  let simulatedBaseLoad = movingAvg * (1 + trendFactor);
 
-  // 3️⃣ Apply dynamic modifiers
-  predictedLoad = applyModifiers(predictedLoad, hospital);
+  // 3) Apply dynamic environment modifiers (pollution/festival/weather)
+  simulatedBaseLoad = applyModifiers(simulatedBaseLoad, hospital);
 
-  // 4️⃣ Resources
   const beds = hospital.resources?.beds || 1;
   const ventilators = hospital.resources?.ventilators || 1;
 
-  // 5️⃣ Utilization (NUMBERS ONLY here)
-  const bedUtilization = predictedLoad / beds;
-  const ventilatorUtilization = (predictedLoad * 0.05) / ventilators;
+  // 4) Choose effective base load
+  //    - If ML is provided → use ML median as base
+  //    - Else → use deterministic simulatedBaseLoad
+  let baseLoad = simulatedBaseLoad;
+  let mlDetails = null;
 
-  // 6️⃣ Risk score (DEFINE BEFORE USE)
+  if (mlPrediction && typeof mlPrediction.median === "number") {
+    baseLoad = mlPrediction.median;
+    mlDetails = {
+      lower: mlPrediction.lower ?? null,
+      median: mlPrediction.median,
+      upper: mlPrediction.upper ?? null,
+    };
+  }
+
+  // 5) Utilization (numeric)
+  const bedUtilization = baseLoad / beds;
+  const ventilatorUtilization = (baseLoad * 0.05) / ventilators;
+
+  // 6) Risk score (numeric)
   const riskScore = Math.min(
     1,
     bedUtilization * 0.6 + ventilatorUtilization * 0.4
   );
 
-  // 7️⃣ Status
+  // 7) Status
   let status = "LOW_RISK";
   if (riskScore > 0.7) status = "HIGH_RISK";
   else if (riskScore > 0.4) status = "MEDIUM_RISK";
 
-  // 8️⃣ Alerts (NOW safe to evaluate)
+  // 8) Alerts (we’ll enhance this in step 2 with ML upper)
   const alerts = evaluateAlerts({
     bedUtilization,
     ventilatorUtilization,
     riskScore,
+    beds,
+    ventilators,
+    mlUpper: mlDetails?.upper ?? null,
   });
 
-  // 9️⃣ Final output (string formatting only here)
+  // 9) Final result
   return {
     id: hospital.id,
-    predictedLoad: Math.round(predictedLoad),
+    predictedLoad: Math.round(baseLoad),
     movingAvg,
     trendFactor,
     bedUtilization: bedUtilization.toFixed(2),
@@ -51,5 +72,7 @@ export function simulateHospital(hospital) {
     riskScore: riskScore.toFixed(2),
     status,
     alerts,
+    ml: mlDetails, // <-- ML context (optional)
+    simulatedBaseLoad: Math.round(simulatedBaseLoad), // for debugging/compare
   };
 }

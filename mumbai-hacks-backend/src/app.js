@@ -10,7 +10,9 @@ import simulationRoutes from "./routes/simulation.routes.js";
 import eventRoutes from "./routes/event.routes.js";
 import aggregationRoutes from "./routes/aggregation.routes.js";
 import alertRoutes from "../src/routes/alerts.routes.js";
-import forecastRoutes from "./routes/forecast.routes.js";
+import forecastRoutes from "./routes/forecastMl.routes.js";
+import simulationMlRoutes from "./routes/simulationMl.routes.js";
+import forecastMlRoutes from "./routes/forecastMl.routes.js";
 
 const app = express();
 
@@ -27,6 +29,8 @@ app.use("/api", simulationRoutes);
 app.use("/api", eventRoutes);
 app.use("/api", alertRoutes);
 app.use("/api", forecastRoutes);
+app.use("/api", simulationMlRoutes);
+app.use("/api", forecastMlRoutes);
 
 app.use((req, res) => res.status(404).json({ message: "Not found" }));
 
