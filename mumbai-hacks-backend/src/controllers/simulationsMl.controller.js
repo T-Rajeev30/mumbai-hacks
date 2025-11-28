@@ -11,11 +11,22 @@ export async function simulateOneWithML(req, res) {
       return res.status(404).json({ error: "Hospital not found" });
     }
 
-    const mlPrediction = await getMLPredictionForHospital(hospital);
+    // ✅ ML with safe fallback
+    let mlPrediction;
+    try {
+      mlPrediction = await getMLPredictionForHospital(hospital);
+    } catch (err) {
+      console.warn("ML failed, falling back to deterministic simulation");
+      const fallback = simulateHospital(hospital);
+      return res.json({
+        ...fallback,
+        ml: null,
+        note: "ML unavailable, deterministic fallback used",
+      });
+    }
 
     const result = simulateHospital(hospital, mlPrediction);
-
-    return res.status(200).json(result);
+    return res.json(result);
   } catch (err) {
     console.error("simulateOneWithML error:", err);
     return res.status(500).json({ error: "ML simulation failed" });
